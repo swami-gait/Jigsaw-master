@@ -1,4 +1,4 @@
-# Jigsaw Master / Kural Puthir
+# Jigsaw Master
 
 A fully-featured, elegant HTML5 Canvas jigsaw puzzle application. It offers a premium, modern design, dynamic drag-and-drop piece snapping algorithms (with realistic interlocking paths), and a dedicated Thirukkural mode that dynamically generates Tamil text onto elegant puzzle backgrounds.
 
