@@ -1,0 +1,764 @@
+class PuzzlePiece {
+    constructor(game, x, y, width, height, tabTypes) {
+        this.game = game;
+        this.gridX = x; // Col index
+        this.gridY = y; // Row index
+        this.width = width;
+        this.height = height;
+        this.tabTypes = tabTypes; // { top, right, bottom, left } (0: flat, 1: tab, -1: blank)
+
+        // Correct position based on the centered original image
+        this.correctX = this.game.imageOffsetX + x * width;
+        this.correctY = this.game.imageOffsetY + y * height;
+
+        // Current position on canvas (randomized initially)
+        this.currentX = Math.random() * (this.game.canvas.width - width * 2) + width;
+        this.currentY = Math.random() * (this.game.canvas.height - height * 2) + height;
+
+        this.isLocked = false;
+
+        // Create an offscreen canvas containing just this piece's image cut out
+        this.pieceCanvas = document.createElement('canvas');
+        this.pieceCanvas.width = width * 2; // Extra space for tabs
+        this.pieceCanvas.height = height * 2;
+        this.pieceCtx = this.pieceCanvas.getContext('2d');
+
+        this.drawPieceShape();
+    }
+
+    drawPieceShape() {
+        const ctx = this.pieceCtx;
+        const w = this.width;
+        const h = this.height;
+        const oX = w * 0.5; // Offset to center the piece in the offscreen canvas
+        const oY = h * 0.5;
+
+        ctx.save();
+        ctx.beginPath();
+        // Path generation logic for jigsaw puzzle tab
+        this.buildPath(ctx, oX, oY, w, h);
+        ctx.clip();
+
+        // Draw the image onto this piece's specific region
+        const imgX = this.gridX * w;
+        const imgY = this.gridY * h;
+
+        // The image source is drawn so that the top-left of the piece aligns with oX, oY
+        ctx.drawImage(this.game.image,
+            imgX - oX, imgY - oY, w * 2, h * 2,
+            0, 0, w * 2, h * 2);
+
+        ctx.restore();
+
+        // Add subtle shadow and border
+        ctx.save();
+        ctx.beginPath();
+        this.buildPath(ctx, oX, oY, w, h);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // Generates the outline of the piece using bezier curves for tabs and blanks
+    buildPath(ctx, startX, startY, w, h) {
+        ctx.moveTo(startX, startY);
+
+        const drawEdge = (length, tabType, isVertical, isReversed) => {
+            if (tabType === 0) {
+                if (isVertical) {
+                    ctx.lineTo(startX + (isReversed ? 0 : w), startY + (isReversed ? 0 : h));
+                } else {
+                    ctx.lineTo(startX + (isReversed ? 0 : w), startY + (isReversed ? 0 : h));
+                }
+                return;
+            }
+            // More complex bezier tabs would go here. For simplicity in dense grids, 
+            // a simplified tab model is implemented.
+            const s = isReversed ? -1 : 1;
+            const t = tabType * 0.25 * length * s;
+            const d = length * s;
+
+            if (isVertical) {
+                // To be implemented: realistic puzzle tabs
+                ctx.lineTo(startX + w, startY + h);
+            } else {
+                ctx.lineTo(startX + w, startY + h);
+            }
+        };
+
+        // Simplified path (Rectangle with semi-circle tabs)
+        // We will build a better interlocking path
+        const buildTab = (pt1, pt2, tabDir) => {
+            if (tabDir === 0) {
+                ctx.lineTo(pt2.x, pt2.y);
+                return;
+            }
+
+            const dx = pt2.x - pt1.x;
+            const dy = pt2.y - pt1.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const midX = pt1.x + dx / 2;
+            const midY = pt1.y + dy / 2;
+
+            const nx = -dy / dist;
+            const ny = dx / dist;
+
+            const tabSize = Math.min(w, h) * 0.2;
+
+            // Cubic bezier approximations for a tab
+            const cp1x = pt1.x + dx * 0.35 + nx * tabSize * tabDir;
+            const cp1y = pt1.y + dy * 0.35 + ny * tabSize * tabDir;
+            const cp2x = pt1.x + dx * 0.65 + nx * tabSize * tabDir;
+            const cp2y = pt1.y + dy * 0.65 + ny * tabSize * tabDir;
+
+            ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, pt2.x, pt2.y);
+        };
+
+        buildTab({ x: startX, y: startY }, { x: startX + w, y: startY }, this.tabTypes.top);
+        buildTab({ x: startX + w, y: startY }, { x: startX + w, y: startY + h }, this.tabTypes.right);
+        buildTab({ x: startX + w, y: startY + h }, { x: startX, y: startY + h }, this.tabTypes.bottom);
+        buildTab({ x: startX, y: startY + h }, { x: startX, y: startY }, this.tabTypes.left);
+    }
+
+    draw(ctx) {
+        const oX = this.width * 0.5;
+        const oY = this.height * 0.5;
+
+        // Draw the pre-rendered piece canvas
+        ctx.drawImage(this.pieceCanvas, this.currentX - oX, this.currentY - oY);
+
+        // Draw glow effect if locked
+        if (this.isLocked) {
+            // Optional: highlight momentarily when locked
+        }
+    }
+
+    containsPoint(px, py) {
+        // Simple bounding box check (improved accuracy requires hit testing the Path2D via context)
+        return px >= this.currentX && px <= this.currentX + this.width &&
+            py >= this.currentY && py <= this.currentY + this.height;
+    }
+}
+
+class JigsawGame {
+    constructor() {
+        this.app = document.getElementById('app');
+        this.setupScreen = document.getElementById('setup-screen');
+        this.gameScreen = document.getElementById('game-screen');
+        this.winOverlay = document.getElementById('win-overlay');
+        this.timeDisplay = document.getElementById('time-display');
+        this.winTime = document.getElementById('win-time');
+        this.winBestTime = document.getElementById('win-best-time');
+
+        this.libraryImages = document.querySelectorAll('.library-img');
+        this.thirukkuralBtn = document.getElementById('thirukkural-btn');
+
+        this.imageUpload = document.getElementById('image-upload');
+        this.imagePreview = document.getElementById('image-preview');
+        this.previewContainer = document.getElementById('preview-container');
+        this.removeBtn = document.getElementById('remove-image');
+        this.startBtn = document.getElementById('start-btn');
+        this.backBtn = document.getElementById('back-btn');
+        this.peekBtn = document.getElementById('peek-btn');
+        this.exportPdfBtn = document.getElementById('export-pdf-btn');
+        this.playAgainBtn = document.getElementById('play-again-btn');
+
+        this.difficultyRadios = document.querySelectorAll('input[name="difficulty"]');
+
+        this.canvas = document.getElementById('puzzle-canvas');
+        this.ctx = this.canvas.getContext('2d');
+
+        this.image = null;
+        this.pieces = [];
+        this.gridSize = 3; // Default
+
+        this.isPeeking = false;
+        this.draggedPiece = null;
+        this.dragOffsetX = 0;
+        this.dragOffsetY = 0;
+
+        this.placedCount = 0;
+        this.totalCount = 0;
+        this.isThirukkuralMode = false;
+
+        this.startTime = 0;
+        this.elapsedTime = 0;
+        this.timerInterval = null;
+
+        this.bindEvents();
+    }
+
+    bindEvents() {
+        this.libraryImages.forEach(img => {
+            img.addEventListener('click', (e) => this.handleLibrarySelection(e.target));
+        });
+
+        if (this.thirukkuralBtn) {
+            this.thirukkuralBtn.addEventListener('click', () => this.selectThirukkural());
+        }
+
+        this.imageUpload.addEventListener('change', (e) => this.handleImageUpload(e));
+        this.removeBtn.addEventListener('click', () => this.removeImage());
+        this.startBtn.addEventListener('click', () => this.startGame());
+        this.backBtn.addEventListener('click', () => this.quitGame());
+        this.playAgainBtn.addEventListener('click', () => this.quitGame());
+
+        this.peekBtn.addEventListener('pointerdown', () => { this.isPeeking = true; this.draw(); });
+        this.peekBtn.addEventListener('pointerup', () => { this.isPeeking = false; this.draw(); });
+        this.peekBtn.addEventListener('pointerleave', () => { this.isPeeking = false; this.draw(); });
+        if (this.exportPdfBtn) {
+            this.exportPdfBtn.addEventListener('click', () => this.exportToPDF());
+        }
+
+        // Canvas interactivity
+        this.canvas.addEventListener('pointerdown', (e) => this.handlePointerDown(e));
+        this.canvas.addEventListener('pointermove', (e) => this.handlePointerMove(e));
+        window.addEventListener('pointerup', (e) => this.handlePointerUp(e));
+
+        window.addEventListener('resize', () => this.resizeCanvas());
+    }
+
+    handleLibrarySelection(imgElement) {
+        if (!imgElement.classList.contains('library-img')) return;
+
+        this.isThirukkuralMode = false;
+
+        // Clear custom upload if any
+        this.removeImage(false);
+
+        // Remove selection from others
+        this.libraryImages.forEach(img => img.classList.remove('selected'));
+        if (this.thirukkuralBtn) this.thirukkuralBtn.classList.remove('selected');
+
+        // Add selection to clicked
+        imgElement.classList.add('selected');
+
+        const src = imgElement.getAttribute('data-src');
+        if (!src) return;
+
+        const img = new Image();
+        img.onload = () => {
+            this.image = img;
+            this.startBtn.disabled = false;
+        };
+        img.src = src;
+    }
+
+    exportToPDF() {
+        console.log("exportToPDF called:", {
+            piecesExist: !!this.pieces,
+            piecesLen: this.pieces ? this.pieces.length : 0,
+            jspdfExist: !!window.jspdf
+        });
+
+        if (!this.pieces || this.pieces.length === 0 || !window.jspdf) {
+            console.log("Early exit from exportToPDF");
+            return;
+        }
+
+        try {
+            // Create an offscreen canvas matching the scaled puzzle board
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = this.scaledW;
+            exportCanvas.height = this.scaledH;
+            const eCtx = exportCanvas.getContext('2d');
+
+            // Draw the base image directly from the main game object reference
+            eCtx.drawImage(this.image, 0, 0, this.scaledW, this.scaledH);
+
+            // Draw the puzzle cutlines
+            eCtx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+            eCtx.lineWidth = 3;
+
+            this.pieces.forEach(p => {
+                const localX = p.correctX - this.imageOffsetX;
+                const localY = p.correctY - this.imageOffsetY;
+
+                eCtx.save();
+                eCtx.translate(localX, localY);
+                eCtx.beginPath();
+                p.buildPath(eCtx, 0, 0, p.width, p.height);
+                eCtx.stroke();
+                eCtx.restore();
+            });
+
+            // Initialize jsPDF
+            const { jsPDF } = window.jspdf;
+            const orientation = this.scaledW > this.scaledH ? 'l' : 'p';
+            const doc = new jsPDF({
+                orientation: orientation,
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            // Add minimal margins
+            const margin = 10;
+            const maxW = pageWidth - margin * 2;
+            const maxH = pageHeight - margin * 2;
+
+            const ratio = Math.min(maxW / this.scaledW, maxH / this.scaledH);
+            const printW = this.scaledW * ratio;
+            const printH = this.scaledH * ratio;
+
+            const offsetX = (pageWidth - printW) / 2;
+            const offsetY = (pageHeight - printH) / 2;
+
+            const imgData = exportCanvas.toDataURL('image/jpeg', 0.9);
+            doc.addImage(imgData, 'JPEG', offsetX, offsetY, printW, printH);
+            doc.save('Jigsaw_Puzzle_Printable.pdf');
+            console.log("PDF generated and save triggered successfully.");
+        } catch (error) {
+            console.error("PDF Export failed:", error);
+            alert("Failed to export PDF: " + error.message);
+        }
+    }
+
+    wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+        const words = text.split(' ');
+        let line = '';
+        let currentY = y;
+
+        for (let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            const metrics = ctx.measureText(testLine);
+            const testWidth = metrics.width;
+            if (testWidth > maxWidth && n > 0) {
+                ctx.fillText(line, x, currentY);
+                line = words[n] + ' ';
+                currentY += lineHeight;
+            } else {
+                line = testLine;
+            }
+        }
+        ctx.fillText(line, x, currentY);
+        return currentY + lineHeight;
+    }
+
+    updateTimerDisplay() {
+        const m = Math.floor(this.elapsedTime / 60).toString().padStart(2, '0');
+        const s = (this.elapsedTime % 60).toString().padStart(2, '0');
+        const timeStr = `${m}:${s}`;
+        if (this.timeDisplay) this.timeDisplay.textContent = timeStr;
+        return timeStr;
+    }
+
+    selectThirukkural() {
+        this.isThirukkuralMode = true;
+        this.removeImage(false);
+        this.libraryImages.forEach(img => img.classList.remove('selected'));
+        if (this.thirukkuralBtn) this.thirukkuralBtn.classList.add('selected');
+        this.startBtn.disabled = false;
+    }
+
+    async generateThirukkuralImage() {
+        if (typeof THIRUKKURAL_DATA === 'undefined' || THIRUKKURAL_DATA.length === 0) return null;
+
+        // Wait for all fonts (like Noto Sans Tamil) to be fully loaded
+        await document.fonts.ready;
+
+        // Pick a random kural
+        const randomIndex = Math.floor(Math.random() * THIRUKKURAL_DATA.length);
+        const kural = THIRUKKURAL_DATA[randomIndex];
+
+        // Create an offscreen canvas for our puzzle image
+        // 3:2 ratio (1800:1200) fits long Tamil text perfectly without wrapping
+        const canvas = document.createElement('canvas');
+        canvas.width = 1800;
+        canvas.height = 1200;
+        const ctx = canvas.getContext('2d');
+
+        // Draw elegant gradient background
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        const hue1 = Math.floor(Math.random() * 360);
+        const hue2 = (hue1 + 40 + Math.random() * 60) % 360;
+
+        gradient.addColorStop(0, `hsl(${hue1}, 70%, 20%)`);
+        gradient.addColorStop(1, `hsl(${hue2}, 80%, 15%)`);
+
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Add subtle pattern or noise (optional, simulating meditation vibes)
+        ctx.fillStyle = 'rgba(255,255,255,0.02)';
+        for (let i = 0; i < 1500; i++) {
+            ctx.beginPath();
+            ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Typography setup
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        // Title
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.font = '600 40px "Outfit", sans-serif';
+        ctx.fillText(`Kural ${kural.number}`, canvas.width / 2, 160);
+
+        // Tamil Kural
+        ctx.fillStyle = '#ffffff';
+        // HTML5 Canvas can sometimes struggle with complex text shaping for Indic scripts (like 'றி').
+        // Prioritize system Tamil fonts that might have stronger native canvas shaping support, 
+        // while falling back to Noto.
+        ctx.font = '700 64px "Latha", "Vijaya", "Nirmala UI", "Mukta Malar", "Tamil MN", "Noto Sans Tamil", sans-serif';
+
+        let startY = 380;
+
+        // Line 1 (4 words) strictly single line
+        ctx.fillText(kural.line1, canvas.width / 2, startY);
+
+        startY += 120;
+
+        // Line 2 (3 words) strictly single line
+        ctx.fillText(kural.line2, canvas.width / 2, startY);
+
+        // Translation
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.font = 'italic 50px Outfit, sans-serif';
+
+        startY += 120;
+        this.wrapText(ctx, kural.translation, canvas.width / 2, startY, canvas.width * 0.9, 75);
+
+        // Border element
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(60, 60, canvas.width - 120, canvas.height - 120);
+
+        return canvas;
+    }
+
+    handleImageUpload(e) {
+        this.isThirukkuralMode = false;
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Clear library selection
+        this.libraryImages.forEach(img => img.classList.remove('selected'));
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                this.image = img;
+                this.imagePreview.src = event.target.result;
+                this.previewContainer.classList.remove('hidden');
+                this.startBtn.disabled = false;
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    removeImage(clearSelection = true) {
+        this.image = null;
+        this.imageUpload.value = '';
+        this.imagePreview.src = '';
+        this.previewContainer.classList.add('hidden');
+        if (clearSelection) {
+            this.startBtn.disabled = true;
+            this.libraryImages.forEach(img => img.classList.remove('selected'));
+            if (this.thirukkuralBtn) this.thirukkuralBtn.classList.remove('selected');
+        }
+    }
+
+    getGridDimensions() {
+        let diff = 3;
+        const radios = document.querySelectorAll('.grid-selector input[type="radio"]');
+        radios.forEach(r => {
+            if (r.checked) diff = parseInt(r.value);
+        });
+
+        // Use standard NxN grid for all modes now that canvas scaling solves text fitment
+        return { cols: diff, rows: diff, diff: diff };
+    }
+
+    async startGame() {
+        if (this.isThirukkuralMode) {
+            this.startBtn.disabled = true; // prevent double clicks
+            this.image = await this.generateThirukkuralImage();
+            this.startBtn.disabled = false;
+        }
+        if (!this.image) return;
+
+        const dims = this.getGridDimensions();
+        this.gridCols = dims.cols;
+        this.gridRows = dims.rows;
+        this.gridSize = dims.diff; // Maintain diff for tracking best times
+
+        this.setupScreen.classList.remove('active');
+        this.gameScreen.classList.add('active');
+        this.winOverlay.classList.add('hidden');
+        if (this.winTimeout) clearTimeout(this.winTimeout);
+
+        // Reset and Start Timer
+        this.elapsedTime = 0;
+        this.startTime = Date.now();
+        if (this.timerInterval) clearInterval(this.timerInterval);
+        this.updateTimerDisplay();
+        this.timerInterval = setInterval(() => {
+            this.elapsedTime = Math.floor((Date.now() - this.startTime) / 1000);
+            this.updateTimerDisplay();
+        }, 1000);
+
+        this.resizeCanvas();
+        this.initPuzzle();
+    }
+
+    quitGame() {
+        if (this.timerInterval) clearInterval(this.timerInterval);
+        if (this.winTimeout) clearTimeout(this.winTimeout);
+
+        this.winOverlay.classList.add('hidden');
+        this.gameScreen.classList.remove('active');
+        this.setupScreen.classList.add('active');
+        this.pieces = [];
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    resizeCanvas() {
+        const container = document.getElementById('canvas-container');
+        this.canvas.width = container.clientWidth;
+        this.canvas.height = container.clientHeight;
+        if (this.pieces.length > 0) {
+            this.draw();
+        }
+    }
+
+    initPuzzle() {
+        this.pieces = [];
+        this.placedCount = 0;
+        this.totalCount = this.gridCols * this.gridRows;
+        this.updateProgress();
+
+        // Calculate image scale to fit elegantly on the canvas
+        const padding = 50; // Padding around the assembled puzzle
+        const availableW = this.canvas.width - padding * 2;
+        const availableH = this.canvas.height - padding * 2;
+
+        const scale = Math.min(availableW / this.image.width, availableH / this.image.height);
+
+        this.scaledW = this.image.width * scale;
+        this.scaledH = this.image.height * scale;
+
+        this.imageOffsetX = (this.canvas.width - this.scaledW) / 2;
+        this.imageOffsetY = (this.canvas.height - this.scaledH) / 2;
+
+        // Create an offscreen canvas containing the scaled image
+        const scaledCanvas = document.createElement('canvas');
+        scaledCanvas.width = this.scaledW;
+        scaledCanvas.height = this.scaledH;
+        const sCtx = scaledCanvas.getContext('2d');
+        sCtx.drawImage(this.image, 0, 0, this.scaledW, this.scaledH);
+
+        // Overwrite this.image with the scaled version for generating pieces
+        const scaledImg = new Image();
+        scaledImg.onload = () => {
+            this.image = scaledImg;
+            this.createPieces();
+        };
+        scaledImg.src = scaledCanvas.toDataURL();
+    }
+
+    createPieces() {
+        const pWidth = this.scaledW / this.gridCols;
+        const pHeight = this.scaledH / this.gridRows;
+
+        // Generate tab configurations
+        const horizontalTabs = []; // row-major, size: gridRows * (gridCols+1)
+        const verticalTabs = [];   // row-major, size: (gridRows+1) * gridCols
+
+        for (let y = 0; y <= this.gridRows; y++) {
+            if (!horizontalTabs[y]) horizontalTabs[y] = [];
+            for (let x = 0; x <= this.gridCols; x++) {
+                horizontalTabs[y][x] = Math.random() > 0.5 ? 1 : -1;
+            }
+        }
+
+        for (let x = 0; x <= this.gridCols; x++) {
+            if (!verticalTabs[x]) verticalTabs[x] = [];
+            for (let y = 0; y <= this.gridRows; y++) {
+                verticalTabs[x][y] = Math.random() > 0.5 ? 1 : -1;
+            }
+        }
+
+        for (let y = 0; y < this.gridRows; y++) {
+            for (let x = 0; x < this.gridCols; x++) {
+                const tabTypes = {
+                    top: y === 0 ? 0 : horizontalTabs[y][x],
+                    right: x === this.gridCols - 1 ? 0 : verticalTabs[x + 1][y],
+                    bottom: y === this.gridRows - 1 ? 0 : -horizontalTabs[y + 1][x],
+                    left: x === 0 ? 0 : -verticalTabs[x][y]
+                };
+
+                this.pieces.push(new PuzzlePiece(this, x, y, pWidth, pHeight, tabTypes));
+            }
+        }
+
+        // Shuffle pieces slightly away from the center
+        this.pieces.forEach(p => {
+            // Push them to edges initially
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Math.min(this.canvas.width, this.canvas.height) * 0.35; // Tighter scatter to avoid edges
+            let targetX = this.canvas.width / 2 + Math.cos(angle) * dist - p.width;
+            let targetY = this.canvas.height / 2 + Math.sin(angle) * dist - p.height;
+
+            // Constrain strictly within viewport factoring in tab overdraw (width*2)
+            targetX = Math.max(0, Math.min(targetX, this.canvas.width - (p.width * 2)));
+            targetY = Math.max(0, Math.min(targetY, this.canvas.height - (p.height * 2)));
+
+            p.currentX = targetX;
+            p.currentY = targetY;
+        });
+
+        this.animLoop();
+    }
+
+    updateProgress() {
+        document.getElementById('placed-count').textContent = this.placedCount;
+        document.getElementById('total-count').textContent = this.totalCount;
+        if (this.placedCount === this.totalCount && this.totalCount > 0) {
+
+            if (this.timerInterval) clearInterval(this.timerInterval);
+            const timeStr = this.updateTimerDisplay();
+
+            // Save best time logic
+            let bestKey = 'bestTime_' + (this.isThirukkuralMode ? 'thirukkural_' : 'custom_') + this.gridSize;
+            let bestStr = localStorage.getItem(bestKey);
+            let bestTime = bestStr ? parseInt(bestStr) : null;
+
+            if (!bestTime || this.elapsedTime < bestTime) {
+                bestTime = this.elapsedTime;
+                localStorage.setItem(bestKey, bestTime.toString());
+            }
+
+            const bm = Math.floor(bestTime / 60).toString().padStart(2, '0');
+            const bs = (bestTime % 60).toString().padStart(2, '0');
+
+            if (this.winTime) this.winTime.textContent = timeStr;
+            if (this.winBestTime) this.winBestTime.textContent = `${bm}:${bs}`;
+
+            if (this.winTimeout) clearTimeout(this.winTimeout);
+            this.winTimeout = setTimeout(() => {
+                this.winOverlay.classList.remove('hidden');
+            }, 500);
+        }
+    }
+
+    animLoop() {
+        this.draw();
+        // Since we only need to redraw on interaction, we don't strict loop RequestAnimationFrame
+        // unless adding continuous animations.
+    }
+
+    draw() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Draw the background placeholder outline
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(this.imageOffsetX, this.imageOffsetY, this.scaledW, this.scaledH);
+
+        // Draw locked pieces first (bottom layer)
+        this.pieces.filter(p => p.isLocked).forEach(p => p.draw(this.ctx));
+
+        if (this.isPeeking && this.image) {
+            // Draw the hint image over the locked pieces, hide the clutter
+            this.ctx.globalAlpha = 0.4;
+            this.ctx.drawImage(this.image, this.imageOffsetX, this.imageOffsetY, this.scaledW, this.scaledH);
+            this.ctx.globalAlpha = 1.0;
+        } else {
+            // Draw unlocked pieces
+            this.pieces.filter(p => !p.isLocked && p !== this.draggedPiece).forEach(p => p.draw(this.ctx));
+
+            // Draw dragged piece on top
+            if (this.draggedPiece) {
+                this.draggedPiece.draw(this.ctx);
+            }
+        }
+    }
+
+    handlePointerDown(e) {
+        if (this.isPeeking || this.placedCount === this.totalCount) return;
+
+        const rect = this.canvas.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const py = e.clientY - rect.top;
+
+        // Find topmost unlocked piece under pointer
+        // Iterate backwards
+        const unlocked = this.pieces.filter(p => !p.isLocked);
+        for (let i = unlocked.length - 1; i >= 0; i--) {
+            const p = unlocked[i];
+            if (p.containsPoint(px, py)) {
+                this.draggedPiece = p;
+                this.dragOffsetX = px - p.currentX;
+                this.dragOffsetY = py - p.currentY;
+                // Move piece to end of array to draw top
+                const idx = this.pieces.indexOf(p);
+                this.pieces.splice(idx, 1);
+                this.pieces.push(p);
+                this.draw();
+                return;
+            }
+        }
+    }
+
+    handlePointerMove(e) {
+        if (!this.draggedPiece) return;
+
+        e.preventDefault(); // Prevent scrolling on touch devices while dragging
+        const rect = this.canvas.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const py = e.clientY - rect.top;
+
+        let targetX = px - this.dragOffsetX;
+        let targetY = py - this.dragOffsetY;
+
+        // Strict constraints to prevent dragging off canvas entirely
+        // Padding preserves grab-ability
+        const pPadding = Math.min(this.draggedPiece.width, this.draggedPiece.height) * 0.4;
+        targetX = Math.max(-pPadding, Math.min(targetX, this.canvas.width - this.draggedPiece.width + pPadding));
+        targetY = Math.max(-pPadding, Math.min(targetY, this.canvas.height - this.draggedPiece.height + pPadding));
+
+        this.draggedPiece.currentX = targetX;
+        this.draggedPiece.currentY = targetY;
+
+        this.draw();
+    }
+
+    handlePointerUp(e) {
+        if (!this.draggedPiece) return;
+
+        const p = this.draggedPiece;
+        const snapThreshold = Math.min(p.width, p.height) * 0.3; // Responsive snap threshold
+
+        const dx = p.currentX - p.correctX;
+        const dy = p.currentY - p.correctY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < snapThreshold) {
+            p.currentX = p.correctX;
+            p.currentY = p.correctY;
+            p.isLocked = true;
+            this.placedCount++;
+            this.updateProgress();
+
+            // Visual pop
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            this.ctx.fillRect(p.currentX, p.currentY, p.width, p.height);
+            setTimeout(() => this.draw(), 100);
+        }
+
+        this.draggedPiece = null;
+        this.draw();
+    }
+}
+
+// Initialize on DOM Load
+document.addEventListener('DOMContentLoaded', () => {
+    window.game = new JigsawGame();
+});

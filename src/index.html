@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>Jigsaw Master</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;600;700&family=Outfit:wght@300;400;600;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="app">
+        <!-- Main Menu -->
+        <div id="setup-screen" class="screen active">
+            <div class="glass-card">
+                <h1>Jigsaw Master</h1>
+
+                <div class="image-library">
+                    <h3>Choose a Puzzle</h3>
+                    <div class="library-grid" id="library-grid">
+                        <div class="library-img thirukkural-btn" id="thirukkural-btn">
+                            <span class="t-icon">அ</span>
+                            <span class="t-text">திருக்குறள்</span>
+                        </div>
+                        <img src="assets/images/animal_lion.png" alt="Lion Cub" class="library-img"
+                            data-src="assets/images/animal_lion.png">
+                        <img src="assets/images/toys.png" alt="Toys" class="library-img"
+                            data-src="assets/images/toys.png">
+                        <img src="assets/images/puppy.png" alt="Puppy" class="library-img"
+                            data-src="assets/images/puppy.png">
+                    </div>
+                </div>
+
+                <div class="upload-divider">
+                    <span>or</span>
+                </div>
+
+                <div class="upload-area" id="upload-area">
+                    <input type="file" id="image-upload" accept="image/*" hidden>
+                    <label for="image-upload" class="upload-btn">
+                        <svg viewBox="0 0 24 24" fill="none" class="icon" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        Upload Custom Image
+                    </label>
+                    <div id="preview-container" class="preview-container hidden">
+                        <img id="image-preview" src="" alt="Preview">
+                        <button class="remove-btn" id="remove-image">✕</button>
+                    </div>
+                </div>
+
+                <div class="difficulty-section">
+                    <h3>Select Difficulty</h3>
+                    <div class="grid-selector">
+                        <input type="radio" name="difficulty" id="diff-3" value="3" checked>
+                        <label for="diff-3">3 x 3<br><small>Beginner</small></label>
+
+                        <input type="radio" name="difficulty" id="diff-5" value="5">
+                        <label for="diff-5">5 x 5<br><small>Easy</small></label>
+
+                        <input type="radio" name="difficulty" id="diff-10" value="10">
+                        <label for="diff-10">10 x 10<br><small>Medium</small></label>
+
+                        <input type="radio" name="difficulty" id="diff-15" value="15">
+                        <label for="diff-15">15 x 15<br><small>Hard</small></label>
+
+                        <input type="radio" name="difficulty" id="diff-20" value="20">
+                        <label for="diff-20">20 x 20<br><small>Expert</small></label>
+
+                        <input type="radio" name="difficulty" id="diff-25" value="25">
+                        <label for="diff-25">25 x 25<br><small>Master</small></label>
+
+                        <input type="radio" name="difficulty" id="diff-30" value="30">
+                        <label for="diff-30">30 x 30<br><small>Legendary</small></label>
+                    </div>
+                </div>
+
+                <button id="start-btn" class="primary-btn" disabled>Start Puzzle</button>
+            </div>
+        </div>
+
+        <!-- Puzzle Game Screen -->
+        <div id="game-screen" class="screen">
+            <header>
+                <button id="back-btn" class="icon-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                </button>
+                <div class="game-stats" style="display:flex; gap:10px;">
+                    <div class="progress">
+                        <span id="placed-count">0</span> / <span id="total-count">0</span>
+                    </div>
+                    <div class="progress timer" style="font-family: monospace; letter-spacing: 1px;">
+                        <span id="time-display">00:00</span>
+                    </div>
+                </div>
+                <button id="peek-btn" class="icon-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </button>
+                <button class="icon-btn" id="export-pdf-btn" title="Export Printable PDF">
+                    <svg viewBox="0 0 24 24" fill="none" class="icon" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                </button>
+            </header>
+
+            <div id="canvas-container">
+                <canvas id="puzzle-canvas"></canvas>
+            </div>
+        </div>
+
+        <!-- Win Overlay -->
+        <div id="win-overlay" class="overlay hidden win-transparent" style="flex-direction: row; gap: 15px;">
+            <div id="win-stats" class="glass-card"
+                style="padding: 1rem 1.5rem; width: auto; pointer-events: auto; text-align: right; background: rgba(15, 17, 26, 0.9);">
+                <div style="color: #34d399; font-weight: bold; font-size: 1.1rem; margin-bottom: 0.25rem;">Puzzle
+                    Complete!</div>
+                <div style="font-size: 0.95rem;">Time: <span id="win-time">00:00</span></div>
+                <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 2px;">Best: <span
+                        id="win-best-time">--:--</span></div>
+            </div>
+            <button id="play-again-btn" class="primary-btn floating-action-btn">
+                <svg viewBox="0 0 24 24" fill="none" class="icon-small" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="width:18px;height:18px;margin-right:8px;vertical-align:middle;">
+                    <polyline points="1 4 1 10 7 10"></polyline>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                </svg>
+                Play Again
+            </button>
+        </div>
+    </div>
+
+    <!-- Hidden element to force the browser's complex text shaping engine to initialize for Tamil conjugations (like றி) before Canvas uses it -->
+    <div
+        style="font-family: 'Noto Sans Tamil', sans-serif; position: absolute; visibility: hidden; pointer-events: none; z-index: -99;">
+        அறிந்து காக்க
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="assets/kurals.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
