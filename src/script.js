@@ -162,7 +162,14 @@ class JigsawGame {
         this.backBtn = document.getElementById('back-btn');
         this.peekBtn = document.getElementById('peek-btn');
         this.exportPdfBtn = document.getElementById('export-pdf-btn');
+        this.fullscreenBtn = document.getElementById('fullscreen-btn');
         this.playAgainBtn = document.getElementById('play-again-btn');
+
+        // Warning Modal
+        this.warningOverlay = document.getElementById('warning-overlay');
+        this.pdfSizeSelect = document.getElementById('pdf-size-select');
+        this.warningExportBtn = document.getElementById('warning-export-btn');
+        this.warningProceedBtn = document.getElementById('warning-proceed-btn');
 
         this.difficultyRadios = document.querySelectorAll('input[name="difficulty"]');
 
@@ -207,8 +214,25 @@ class JigsawGame {
         this.peekBtn.addEventListener('pointerdown', () => { this.isPeeking = true; this.draw(); });
         this.peekBtn.addEventListener('pointerup', () => { this.isPeeking = false; this.draw(); });
         this.peekBtn.addEventListener('pointerleave', () => { this.isPeeking = false; this.draw(); });
+        if (this.fullscreenBtn) {
+            this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
+        }
         if (this.exportPdfBtn) {
-            this.exportPdfBtn.addEventListener('click', () => this.exportToPDF());
+            // Default header button exports to A4
+            this.exportPdfBtn.addEventListener('click', () => this.exportToPDF('a4'));
+        }
+
+        if (this.warningExportBtn) {
+            this.warningExportBtn.addEventListener('click', () => {
+                const size = this.pdfSizeSelect ? this.pdfSizeSelect.value : 'a4';
+                this.exportToPDF(size);
+            });
+        }
+        if (this.warningProceedBtn) {
+            this.warningProceedBtn.addEventListener('click', () => {
+                this.warningOverlay.classList.add('hidden');
+                this.startTimer();
+            });
         }
 
         // Canvas interactivity
@@ -217,6 +241,7 @@ class JigsawGame {
         window.addEventListener('pointerup', (e) => this.handlePointerUp(e));
 
         window.addEventListener('resize', () => this.resizeCanvas());
+        document.addEventListener('fullscreenchange', () => this.resizeCanvas());
     }
 
     handleLibrarySelection(imgElement) {
@@ -245,7 +270,19 @@ class JigsawGame {
         img.src = src;
     }
 
-    exportToPDF() {
+    toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.warn(`Error attempting to enable fullscreen: ${err.message}`);
+            });
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    }
+
+    exportToPDF(format = 'a4') {
         console.log("exportToPDF called:", {
             piecesExist: !!this.pieces,
             piecesLen: this.pieces ? this.pieces.length : 0,
@@ -258,11 +295,20 @@ class JigsawGame {
         }
 
         try {
+            // Determine a high-DPI scaling factor for larger paper formats
+            let qualityScale = 1;
+            if (format === 'a3') qualityScale = 1.5;
+            if (format === 'a2') qualityScale = 2.0;
+
             // Create an offscreen canvas matching the scaled puzzle board
             const exportCanvas = document.createElement('canvas');
-            exportCanvas.width = this.scaledW;
-            exportCanvas.height = this.scaledH;
+            exportCanvas.width = this.scaledW * qualityScale;
+            exportCanvas.height = this.scaledH * qualityScale;
+
             const eCtx = exportCanvas.getContext('2d');
+
+            // Scale the drawing context so the math remains standard but the pixel density increases
+            eCtx.scale(qualityScale, qualityScale);
 
             // Draw the base image directly from the main game object reference
             eCtx.drawImage(this.image, 0, 0, this.scaledW, this.scaledH);
@@ -289,7 +335,7 @@ class JigsawGame {
             const doc = new jsPDF({
                 orientation: orientation,
                 unit: 'mm',
-                format: 'a4'
+                format: format
             });
 
             const pageWidth = doc.internal.pageSize.getWidth();
@@ -321,20 +367,47 @@ class JigsawGame {
         const words = text.split(' ');
         let line = '';
         let currentY = y;
+        let isFirstLine = true;
+        const originalAlign = ctx.textAlign;
+
+        let rightJustifiedX = x;
+        if (originalAlign === 'center') {
+            rightJustifiedX = x + (maxWidth / 2);
+        } else if (originalAlign === 'left' || originalAlign === 'start') {
+            rightJustifiedX = x + maxWidth;
+        }
 
         for (let n = 0; n < words.length; n++) {
             const testLine = line + words[n] + ' ';
             const metrics = ctx.measureText(testLine);
             const testWidth = metrics.width;
+
             if (testWidth > maxWidth && n > 0) {
-                ctx.fillText(line, x, currentY);
+                if (isFirstLine) {
+                    ctx.textAlign = originalAlign;
+                    ctx.fillText(line.trim(), x, currentY);
+                    isFirstLine = false;
+                } else {
+                    ctx.textAlign = 'right';
+                    ctx.fillText(line.trim(), rightJustifiedX, currentY);
+                }
+
                 line = words[n] + ' ';
                 currentY += lineHeight;
             } else {
                 line = testLine;
             }
         }
-        ctx.fillText(line, x, currentY);
+
+        if (isFirstLine) {
+            ctx.textAlign = originalAlign;
+            ctx.fillText(line.trim(), x, currentY);
+        } else {
+            ctx.textAlign = 'right';
+            ctx.fillText(line.trim(), rightJustifiedX, currentY);
+        }
+
+        ctx.textAlign = originalAlign;
         return currentY + lineHeight;
     }
 
@@ -406,22 +479,32 @@ class JigsawGame {
         // while falling back to Noto.
         ctx.font = '700 64px "Latha", "Vijaya", "Nirmala UI", "Mukta Malar", "Tamil MN", "Noto Sans Tamil", sans-serif';
 
+        // Calculate the bounding box based on Line 1 to create a unified left-aligned text block
+        const maxTextWidth = canvas.width * 0.9;
+        const line1Width = ctx.measureText(kural.line1).width;
+        const boundedWidth = Math.min(line1Width, maxTextWidth);
+        const startX = (canvas.width - boundedWidth) / 2;
+
+        ctx.textAlign = 'left';
+
+        // Line 1 (Tamil)
         let startY = 380;
+        startY = this.wrapText(ctx, kural.line1, startX, startY, maxTextWidth, 85);
 
-        // Line 1 (4 words) strictly single line
-        ctx.fillText(kural.line1, canvas.width / 2, startY);
+        startY += 40;
 
-        startY += 120;
+        // Line 2 (Tamil)
+        startY = this.wrapText(ctx, kural.line2, startX, startY, maxTextWidth, 85);
 
-        // Line 2 (3 words) strictly single line
-        ctx.fillText(kural.line2, canvas.width / 2, startY);
+        // Add breathing room before translation
+        startY += 80;
 
         // Translation
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         ctx.font = 'italic 50px Outfit, sans-serif';
 
-        startY += 120;
-        this.wrapText(ctx, kural.translation, canvas.width / 2, startY, canvas.width * 0.9, 75);
+        startY += 40;
+        this.wrapText(ctx, kural.translation, startX, startY, maxTextWidth, 75);
 
         // Border element
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
@@ -492,20 +575,32 @@ class JigsawGame {
         this.setupScreen.classList.remove('active');
         this.gameScreen.classList.add('active');
         this.winOverlay.classList.add('hidden');
+        if (this.timerInterval) clearInterval(this.timerInterval);
         if (this.winTimeout) clearTimeout(this.winTimeout);
 
-        // Reset and Start Timer
+        this.resizeCanvas();
+        this.initPuzzle();
+
+        // Warning intercept for extremely high piece counts on all devices
+        if (this.gridSize >= 15) {
+            this.warningOverlay.classList.remove('hidden');
+            this.elapsedTime = 0;
+            this.updateTimerDisplay();
+            // Pause here, waiting for user to 'Proceed' or 'Export'
+            return;
+        }
+
+        this.startTimer();
+    }
+
+    startTimer() {
         this.elapsedTime = 0;
         this.startTime = Date.now();
-        if (this.timerInterval) clearInterval(this.timerInterval);
         this.updateTimerDisplay();
         this.timerInterval = setInterval(() => {
             this.elapsedTime = Math.floor((Date.now() - this.startTime) / 1000);
             this.updateTimerDisplay();
         }, 1000);
-
-        this.resizeCanvas();
-        this.initPuzzle();
     }
 
     quitGame() {
@@ -598,20 +693,31 @@ class JigsawGame {
             }
         }
 
-        // Shuffle pieces slightly away from the center
+        // Shuffle pieces organically across the screen
         this.pieces.forEach(p => {
-            // Push them to edges initially
-            const angle = Math.random() * Math.PI * 2;
-            const dist = Math.min(this.canvas.width, this.canvas.height) * 0.35; // Tighter scatter to avoid edges
-            let targetX = this.canvas.width / 2 + Math.cos(angle) * dist - p.width;
-            let targetY = this.canvas.height / 2 + Math.sin(angle) * dist - p.height;
+            // Scatter randomly across the entire canvas width and height
+            // We factor in the tab overdraw (p.width * 2) so they don't clip off-screen
+            const safeWidth = this.canvas.width - (p.width * 2);
+            const safeHeight = this.canvas.height - (p.height * 2);
 
-            // Constrain strictly within viewport factoring in tab overdraw (width*2)
-            targetX = Math.max(0, Math.min(targetX, this.canvas.width - (p.width * 2)));
-            targetY = Math.max(0, Math.min(targetY, this.canvas.height - (p.height * 2)));
+            let targetX = Math.random() * safeWidth;
+            let targetY = Math.random() * safeHeight;
 
-            p.currentX = targetX;
-            p.currentY = targetY;
+            // Optional: Gently push pieces away from the absolute dead-center 
+            // so the user has visual space to start building the middle
+            const centerX = safeWidth / 2;
+            const centerY = safeHeight / 2;
+            const distToCenter = Math.hypot(targetX - centerX, targetY - centerY);
+
+            if (distToCenter < Math.min(safeWidth, safeHeight) * 0.15) {
+                // If it spawned perfectly in the middle, push it out to a random quadrant
+                targetX += (Math.random() > 0.5 ? 1 : -1) * (safeWidth * 0.25);
+                targetY += (Math.random() > 0.5 ? 1 : -1) * (safeHeight * 0.25);
+            }
+
+            // Final safety clamp to remain on-screen
+            p.currentX = Math.max(0, Math.min(targetX, safeWidth));
+            p.currentY = Math.max(0, Math.min(targetY, safeHeight));
         });
 
         this.animLoop();

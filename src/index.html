@@ -112,6 +112,14 @@
                         <circle cx="12" cy="12" r="3"></circle>
                     </svg>
                 </button>
+                <button class="icon-btn" id="fullscreen-btn" title="Toggle Fullscreen">
+                    <svg viewBox="0 0 24 24" fill="none" class="icon" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                            d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3">
+                        </path>
+                    </svg>
+                </button>
                 <button class="icon-btn" id="export-pdf-btn" title="Export Printable PDF">
                     <svg viewBox="0 0 24 24" fill="none" class="icon" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
@@ -146,6 +154,30 @@
                 </svg>
                 Play Again
             </button>
+        </div>
+
+        <!-- Mobile Difficulty Warning Overlay -->
+        <div id="warning-overlay" class="overlay hidden">
+            <div class="glass-card" style="max-width: 400px; text-align: center; padding: 2rem;">
+                <h3 style="color: #fbbf24; margin-bottom: 1rem;">Whoa, that's a lot of pieces!</h3>
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.95rem; line-height: 1.4;">
+                    This high-difficulty setting is not recommended for small screens. We highly recommend exporting the
+                    puzzle as a printable PDF instead!
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; gap: 10px;">
+                        <select id="pdf-size-select"
+                            style="flex:1; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid rgba(255,255,255,0.1);">
+                            <option value="a4">A4</option>
+                            <option value="a3">A3</option>
+                            <option value="a2">A2</option>
+                        </select>
+                        <button id="warning-export-btn" class="primary-btn" style="flex: 2;">🖨️ Export PDF</button>
+                    </div>
+                    <button id="warning-proceed-btn" class="secondary-btn"
+                        style="background: rgba(255,255,255,0.05); border: none;">Proceed Anyway</button>
+                </div>
+            </div>
         </div>
     </div>
 
