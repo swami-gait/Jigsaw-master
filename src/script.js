@@ -164,6 +164,14 @@ class JigsawGame {
         this.exportPdfBtn = document.getElementById('export-pdf-btn');
         this.fullscreenBtn = document.getElementById('fullscreen-btn');
         this.playAgainBtn = document.getElementById('play-again-btn');
+        this.closeWinBtn = document.getElementById('close-win-btn');
+
+        // Custom panning engine variables
+        this.isPanning = false;
+        this.panStartX = 0;
+        this.panStartY = 0;
+        this.initialScrollLeft = 0;
+        this.initialScrollTop = 0;
 
         // Warning Modal
         this.warningOverlay = document.getElementById('warning-overlay');
@@ -210,6 +218,11 @@ class JigsawGame {
         this.startBtn.addEventListener('click', () => this.startGame());
         this.backBtn.addEventListener('click', () => this.quitGame());
         this.playAgainBtn.addEventListener('click', () => this.quitGame());
+        if (this.closeWinBtn) {
+            this.closeWinBtn.addEventListener('click', () => {
+                this.winOverlay.classList.add('hidden');
+            });
+        }
 
         this.peekBtn.addEventListener('pointerdown', () => { this.isPeeking = true; this.draw(); });
         this.peekBtn.addEventListener('pointerup', () => { this.isPeeking = false; this.draw(); });
@@ -615,12 +628,11 @@ class JigsawGame {
     }
 
     resizeCanvas() {
+        if (this.pieces.length > 0) return; // Freeze dynamic squishing during active gameplay. The user will pan natively instead!
+
         const container = document.getElementById('canvas-container');
         this.canvas.width = container.clientWidth;
         this.canvas.height = container.clientHeight;
-        if (this.pieces.length > 0) {
-            this.draw();
-        }
     }
 
     initPuzzle() {
@@ -631,13 +643,27 @@ class JigsawGame {
 
         // Calculate image scale to fit elegantly on the canvas
         const padding = 50; // Padding around the assembled puzzle
-        const availableW = this.canvas.width - padding * 2;
-        const availableH = this.canvas.height - padding * 2;
+        const container = document.getElementById('canvas-container');
+        const availableW = container.clientWidth - padding * 2;
+        const availableH = container.clientHeight - padding * 2;
 
-        const scale = Math.min(availableW / this.image.width, availableH / this.image.height);
+        const idealScale = Math.min(availableW / this.image.width, availableH / this.image.height);
+
+        // Prevent "stamp size" shrinking in landscape mode
+        const minScreenDim = Math.min(container.clientWidth, container.clientHeight);
+        const minScale = (minScreenDim * 0.70) / Math.min(this.image.width, this.image.height);
+
+        const scale = Math.max(idealScale, minScale);
 
         this.scaledW = this.image.width * scale;
         this.scaledH = this.image.height * scale;
+
+        // Force canvas physical geometric bounds to expand out to hold the massive payload
+        const reqW = Math.max(container.clientWidth, Math.floor(this.scaledW + padding * 2));
+        const reqH = Math.max(container.clientHeight, Math.floor(this.scaledH + padding * 2));
+
+        this.canvas.width = reqW;
+        this.canvas.height = reqH;
 
         this.imageOffsetX = (this.canvas.width - this.scaledW) / 2;
         this.imageOffsetY = (this.canvas.height - this.scaledH) / 2;
@@ -791,11 +817,15 @@ class JigsawGame {
         if (this.isPeeking || this.placedCount === this.totalCount) return;
 
         const rect = this.canvas.getBoundingClientRect();
-        const px = e.clientX - rect.left;
-        const py = e.clientY - rect.top;
+
+        // Transform CSS display pixels into raw internal Canvas texture pixels
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+
+        const px = (e.clientX - rect.left) * scaleX;
+        const py = (e.clientY - rect.top) * scaleY;
 
         // Find topmost unlocked piece under pointer
-        // Iterate backwards
         const unlocked = this.pieces.filter(p => !p.isLocked);
         for (let i = unlocked.length - 1; i >= 0; i--) {
             const p = unlocked[i];
@@ -811,15 +841,34 @@ class JigsawGame {
                 return;
             }
         }
+
+        // No piece hit! Ignite custom camera panning engine!
+        const container = document.getElementById('canvas-container');
+        this.isPanning = true;
+        this.panStartX = e.clientX;
+        this.panStartY = e.clientY;
+        this.initialScrollLeft = container.scrollLeft;
+        this.initialScrollTop = container.scrollTop;
     }
 
     handlePointerMove(e) {
+        if (this.isPanning) {
+            const container = document.getElementById('canvas-container');
+            container.scrollLeft = this.initialScrollLeft - (e.clientX - this.panStartX);
+            container.scrollTop = this.initialScrollTop - (e.clientY - this.panStartY);
+            return;
+        }
+
         if (!this.draggedPiece) return;
 
         e.preventDefault(); // Prevent scrolling on touch devices while dragging
         const rect = this.canvas.getBoundingClientRect();
-        const px = e.clientX - rect.left;
-        const py = e.clientY - rect.top;
+
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+
+        const px = (e.clientX - rect.left) * scaleX;
+        const py = (e.clientY - rect.top) * scaleY;
 
         let targetX = px - this.dragOffsetX;
         let targetY = py - this.dragOffsetY;
@@ -837,6 +886,8 @@ class JigsawGame {
     }
 
     handlePointerUp(e) {
+        this.isPanning = false;
+
         if (!this.draggedPiece) return;
 
         const p = this.draggedPiece;
