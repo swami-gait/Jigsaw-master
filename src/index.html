@@ -136,20 +136,14 @@
         </div>
 
         <!-- Win Overlay -->
-        <div id="win-overlay" class="overlay hidden"
-            style="flex-direction: column; gap: 15px; align-items: flex-end; justify-content: flex-start; padding: 20px; pointer-events: none;">
-            <div id="win-stats" class="glass-card"
-                style="padding: 1.5rem; width: auto; pointer-events: auto; text-align: center; position: relative; background: rgba(15, 17, 26, 0.95); border: 1px solid rgba(255,255,255,0.1);">
-                <button id="close-win-btn"
-                    style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer; padding: 0 5px; line-height: 1; transition: color 0.2s;">&times;</button>
-                <div
-                    style="color: #34d399; font-weight: bold; font-size: 1.2rem; margin-bottom: 0.5rem; padding-right: 20px;">
-                    Puzzle Complete!</div>
-                <div style="font-size: 1rem;">Time: <span id="win-time">00:00</span></div>
-                <div style="font-size: 0.9rem; color: var(--text-muted); margin-top: 5px;">Best: <span
-                        id="win-best-time">--:--</span></div>
+        <div id="win-overlay" class="overlay hidden">
+            <div id="win-stats" class="glass-card">
+                <button id="close-win-btn" title="Dismiss">&times;</button>
+                <div class="win-title">Puzzle Complete!</div>
+                <div class="win-time-label">Time: <span id="win-time">00:00</span></div>
+                <div class="win-best-label">Best: <span id="win-best-time">--:--</span></div>
             </div>
-            <button id="play-again-btn" class="primary-btn floating-action-btn" style="pointer-events: auto;">
+            <button id="play-again-btn" class="primary-btn floating-action-btn">
                 <svg viewBox="0 0 24 24" fill="none" class="icon-small" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round"
                     style="width:18px;height:18px;margin-right:8px;vertical-align:middle;">

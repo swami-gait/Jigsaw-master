@@ -531,3 +531,71 @@ header {
         transform: scale(1) translateY(0);
     }
 }
+
+/* Custom Win UI rules shifted from inline HTML to bypass Mobile CSP */
+#win-overlay {
+    flex-direction: column;
+    gap: 15px;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 2.5rem;
+}
+
+/* 
+ * The default .overlay (when active) receives pointer-events: auto 
+ * But we want the background of the WIN overlay to be completely click-through,
+ * so the user can tap the puzzle canvas beneath it to dismiss the UI. 
+ */
+#win-overlay:not(.hidden) {
+    pointer-events: none;
+}
+
+#win-stats {
+    padding: 1.5rem;
+    width: auto;
+    max-width: 300px;
+    pointer-events: auto;
+    /* Essential: allow clicks on the stats card itself */
+    text-align: center;
+    position: relative;
+    background: rgba(15, 17, 26, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#close-win-btn {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.8rem;
+    cursor: pointer;
+    padding: 0 5px;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+#close-win-btn:hover {
+    color: #fff;
+    text-decoration: none;
+}
+
+.win-title {
+    color: #34d399;
+    font-weight: bold;
+    font-size: 1.3rem;
+    margin-bottom: 0.5rem;
+    padding-right: 25px;
+    /* Leave space for X button */
+}
+
+.win-time-label {
+    font-size: 1.1rem;
+}
+
+.win-best-label {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-top: 5px;
+}
