@@ -814,7 +814,12 @@ class JigsawGame {
     }
 
     handlePointerDown(e) {
-        if (this.isPeeking || this.placedCount === this.totalCount) return;
+        if (this.isPeeking) return;
+
+        // Hide the Win UI automatically if the player taps the board to explore!
+        if (this.placedCount === this.totalCount) {
+            this.winOverlay.classList.add('hidden');
+        }
 
         const rect = this.canvas.getBoundingClientRect();
 
