@@ -161,10 +161,18 @@ class JigsawGame {
         this.startBtn = document.getElementById('start-btn');
         this.backBtn = document.getElementById('back-btn');
         this.peekBtn = document.getElementById('peek-btn');
+        this.gridBtn = document.getElementById('grid-btn');
+        this.refreshTrayBtn = document.getElementById('refresh-tray-btn');
         this.exportPdfBtn = document.getElementById('export-pdf-btn');
         this.fullscreenBtn = document.getElementById('fullscreen-btn');
         this.playAgainBtn = document.getElementById('play-again-btn');
         this.closeWinBtn = document.getElementById('close-win-btn');
+
+        this.zoomInBtn = document.getElementById('zoom-in-btn');
+        this.zoomOutBtn = document.getElementById('zoom-out-btn');
+        this.zoomLabel = document.getElementById('zoom-label');
+        this.zoomLevel = 1.0;
+
 
         // Custom panning engine variables
         this.isPanning = false;
@@ -196,6 +204,15 @@ class JigsawGame {
         this.placedCount = 0;
         this.totalCount = 0;
         this.isThirukkuralMode = false;
+        this.maxVisiblePieces = 3;
+        this.isGridVisible = false;
+
+        this.snapEffects = [];
+        this.isAnimatingEffects = false;
+
+        // For synthetic audio
+        this.audioCtx = null;
+        this.audioUnlocked = false;
 
         this.startTime = 0;
         this.elapsedTime = 0;
@@ -227,6 +244,26 @@ class JigsawGame {
         this.peekBtn.addEventListener('pointerdown', () => { this.isPeeking = true; this.draw(); });
         this.peekBtn.addEventListener('pointerup', () => { this.isPeeking = false; this.draw(); });
         this.peekBtn.addEventListener('pointerleave', () => { this.isPeeking = false; this.draw(); });
+
+        if (this.gridBtn) {
+            this.gridBtn.addEventListener('click', () => {
+                this.isGridVisible = !this.isGridVisible;
+                if (this.isGridVisible) {
+                    this.gridBtn.classList.add('active');
+                } else {
+                    this.gridBtn.classList.remove('active');
+                }
+                this.draw();
+            });
+        }
+
+        if (this.refreshTrayBtn) {
+            this.refreshTrayBtn.addEventListener('click', () => this.refreshTray());
+        }
+
+        if (this.zoomInBtn) this.zoomInBtn.addEventListener('click', () => this.handleZoom(0.1));
+        if (this.zoomOutBtn) this.zoomOutBtn.addEventListener('click', () => this.handleZoom(-0.1));
+
         if (this.fullscreenBtn) {
             this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
         }
@@ -255,6 +292,26 @@ class JigsawGame {
 
         window.addEventListener('resize', () => this.resizeCanvas());
         document.addEventListener('fullscreenchange', () => this.resizeCanvas());
+    }
+
+    handleZoom(delta) {
+        if (this.pieces.length === 0) return;
+        this.zoomLevel += delta;
+
+        // Clamp zoom between 0.3x (Fit Screen) and 2.0x
+        this.zoomLevel = Math.max(0.3, Math.min(this.zoomLevel, 2.0));
+
+        if (this.zoomLabel) {
+            this.zoomLabel.textContent = Math.round(this.zoomLevel * 100) + '%';
+        }
+
+        // Apply visual CSS transform. Hardware accelerated and instant.
+        this.canvas.style.transform = `scale(${this.zoomLevel})`;
+
+        // Adjust the physical layout bounding box to match the visual scale.
+        // Negative margins pull the bounds inward exactly proportioned to the missing scale!
+        this.canvas.style.marginRight = `-${this.canvas.width * (1 - this.zoomLevel)}px`;
+        this.canvas.style.marginBottom = `-${this.canvas.height * (1 - this.zoomLevel)}px`;
     }
 
     handleLibrarySelection(imgElement) {
@@ -376,7 +433,7 @@ class JigsawGame {
         }
     }
 
-    wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+    wrapText(ctx, text, x, y, maxWidth, lineHeight, forceCenter = false) {
         const words = text.split(' ');
         let line = '';
         let currentY = y;
@@ -401,8 +458,9 @@ class JigsawGame {
                     ctx.fillText(line.trim(), x, currentY);
                     isFirstLine = false;
                 } else {
-                    ctx.textAlign = 'right';
-                    ctx.fillText(line.trim(), rightJustifiedX, currentY);
+                    ctx.textAlign = forceCenter ? originalAlign : 'right';
+                    const drawX = forceCenter ? x : rightJustifiedX;
+                    ctx.fillText(line.trim(), drawX, currentY);
                 }
 
                 line = words[n] + ' ';
@@ -416,8 +474,9 @@ class JigsawGame {
             ctx.textAlign = originalAlign;
             ctx.fillText(line.trim(), x, currentY);
         } else {
-            ctx.textAlign = 'right';
-            ctx.fillText(line.trim(), rightJustifiedX, currentY);
+            ctx.textAlign = forceCenter ? originalAlign : 'right';
+            const drawX = forceCenter ? x : rightJustifiedX;
+            ctx.fillText(line.trim(), drawX, currentY);
         }
 
         ctx.textAlign = originalAlign;
@@ -514,10 +573,10 @@ class JigsawGame {
 
         // Translation
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.font = 'italic 50px Outfit, sans-serif';
+        ctx.font = 'italic 60px Outfit, sans-serif';
 
         startY += 40;
-        this.wrapText(ctx, kural.translation, startX, startY, maxTextWidth, 75);
+        this.wrapText(ctx, kural.translation, startX, startY, maxTextWidth, 85, true);
 
         // Border element
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
@@ -573,6 +632,7 @@ class JigsawGame {
     }
 
     async startGame() {
+        this.initAudio();
         if (this.isThirukkuralMode) {
             this.startBtn.disabled = true; // prevent double clicks
             this.image = await this.generateThirukkuralImage();
@@ -641,17 +701,36 @@ class JigsawGame {
         this.totalCount = this.gridCols * this.gridRows;
         this.updateProgress();
 
+        // Reset Camera Zoom
+        this.zoomLevel = 1.0;
+        if (this.zoomLabel) this.zoomLabel.textContent = '100%';
+        this.canvas.style.transform = `scale(1.0)`;
+        this.canvas.style.marginRight = `0px`;
+        this.canvas.style.marginBottom = `0px`;
+        this.totalCount = this.gridCols * this.gridRows;
+        this.updateProgress();
+
         // Calculate image scale to fit elegantly on the canvas
-        const padding = 50; // Padding around the assembled puzzle
         const container = document.getElementById('canvas-container');
-        const availableW = container.clientWidth - padding * 2;
-        const availableH = container.clientHeight - padding * 2;
+        const padding = 50; // Padding around the assembled puzzle
+        const traySpace = 180; // Reserve fixed space for the tray piece pool
+        
+        this.isLandscapeMode = container.clientWidth > container.clientHeight;
+        
+        let availableW = container.clientWidth - padding * 2;
+        let availableH = container.clientHeight - padding * 2;
+        
+        if (this.isLandscapeMode) {
+            availableW -= traySpace; // Tray goes on the right
+        } else {
+            availableH -= traySpace; // Tray goes on the bottom
+        }
 
         const idealScale = Math.min(availableW / this.image.width, availableH / this.image.height);
 
-        // Prevent "stamp size" shrinking in landscape mode
+        // Prevent "stamp size" shrinking
         const minScreenDim = Math.min(container.clientWidth, container.clientHeight);
-        const minScale = (minScreenDim * 0.70) / Math.min(this.image.width, this.image.height);
+        const minScale = (minScreenDim * 0.50) / Math.min(this.image.width, this.image.height);
 
         const scale = Math.max(idealScale, minScale);
 
@@ -659,14 +738,25 @@ class JigsawGame {
         this.scaledH = this.image.height * scale;
 
         // Force canvas physical geometric bounds to expand out to hold the massive payload
-        const reqW = Math.max(container.clientWidth, Math.floor(this.scaledW + padding * 2));
-        const reqH = Math.max(container.clientHeight, Math.floor(this.scaledH + padding * 2));
+        let reqW = Math.max(container.clientWidth, Math.floor(this.scaledW + padding * 2));
+        let reqH = Math.max(container.clientHeight, Math.floor(this.scaledH + padding * 2));
+        
+        if (this.isLandscapeMode) {
+            reqW = Math.max(reqW, Math.floor(this.scaledW + padding + traySpace));
+        } else {
+            reqH = Math.max(reqH, Math.floor(this.scaledH + padding + traySpace));
+        }
 
         this.canvas.width = reqW;
         this.canvas.height = reqH;
 
-        this.imageOffsetX = (this.canvas.width - this.scaledW) / 2;
-        this.imageOffsetY = (this.canvas.height - this.scaledH) / 2;
+        if (this.isLandscapeMode) {
+            this.imageOffsetX = padding; // Pin to left edge, leaving right area strictly for the tray
+            this.imageOffsetY = (this.canvas.height - this.scaledH) / 2;
+        } else {
+            this.imageOffsetX = (this.canvas.width - this.scaledW) / 2;
+            this.imageOffsetY = padding; // Pin to top to leave bottom area strictly for the tray
+        }
 
         // Create an offscreen canvas containing the scaled image
         const scaledCanvas = document.createElement('canvas');
@@ -719,34 +809,77 @@ class JigsawGame {
             }
         }
 
-        // Shuffle pieces organically across the screen
-        this.pieces.forEach(p => {
-            // Scatter randomly across the entire canvas width and height
-            // We factor in the tab overdraw (p.width * 2) so they don't clip off-screen
-            const safeWidth = this.canvas.width - (p.width * 2);
-            const safeHeight = this.canvas.height - (p.height * 2);
+        // Shuffle the pieces array so they spawn completely randomly instead of row-by-row
+        for (let i = this.pieces.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [this.pieces[i], this.pieces[j]] = [this.pieces[j], this.pieces[i]];
+        }
 
-            let targetX = Math.random() * safeWidth;
-            let targetY = Math.random() * safeHeight;
+        this.pieces.forEach(p => p.isVisible = false);
 
-            // Optional: Gently push pieces away from the absolute dead-center 
-            // so the user has visual space to start building the middle
-            const centerX = safeWidth / 2;
-            const centerY = safeHeight / 2;
-            const distToCenter = Math.hypot(targetX - centerX, targetY - centerY);
-
-            if (distToCenter < Math.min(safeWidth, safeHeight) * 0.15) {
-                // If it spawned perfectly in the middle, push it out to a random quadrant
-                targetX += (Math.random() > 0.5 ? 1 : -1) * (safeWidth * 0.25);
-                targetY += (Math.random() > 0.5 ? 1 : -1) * (safeHeight * 0.25);
-            }
-
-            // Final safety clamp to remain on-screen
-            p.currentX = Math.max(0, Math.min(targetX, safeWidth));
-            p.currentY = Math.max(0, Math.min(targetY, safeHeight));
-        });
+        // Initialize active pool mechanic (Tray)
+        let piecesToShow = Math.min(this.maxVisiblePieces, this.pieces.length);
+        for(let i=0; i<piecesToShow; i++) {
+            this.spawnPieceInTray(this.pieces[i]);
+        }
 
         this.animLoop();
+    }
+
+    spawnPieceInTray(p) {
+        if (this.isLandscapeMode) {
+            // Landscape: Tray is on the right side of the puzzle board
+            const puzzleRight = this.imageOffsetX + this.scaledW;
+            const trayXStart = puzzleRight + 30; // 30px gap
+            
+            // Spawn vertically within the puzzle's height
+            const spawnAreaY = Math.max(this.scaledH - (p.height * 2), 50);
+
+            p.currentX = trayXStart + (Math.random() * 60); // Horizontal jitter
+            p.currentY = this.imageOffsetY + (Math.random() * spawnAreaY);
+        } else {
+            // Portrait: Tray is at the bottom of the puzzle board
+            const puzzleBottom = this.imageOffsetY + this.scaledH;
+            const trayYStart = puzzleBottom + 30; // 30px gap
+            
+            // Spawn horizontally within the puzzle's width
+            const spawnAreaX = Math.max(this.scaledW - (p.width * 2), 50);
+            
+            p.currentX = this.imageOffsetX + (Math.random() * spawnAreaX);
+            p.currentY = trayYStart + (Math.random() * 60); // Vertical jitter
+        }
+        
+        p.isVisible = true;
+    }
+
+    refreshTray() {
+        if (!this.pieces || this.pieces.length === 0) return;
+
+        let visibleUnlocked = this.pieces.filter(p => !p.isLocked && p.isVisible);
+        let hiddenUnlocked = this.pieces.filter(p => !p.isLocked && !p.isVisible);
+        
+        if (hiddenUnlocked.length === 0) return; // No hidden pieces left to swap with
+
+        // Hide current visible pieces
+        visibleUnlocked.forEach(p => p.isVisible = false);
+
+        // Pool all remaining unlocked pieces
+        let availablePool = [...hiddenUnlocked, ...visibleUnlocked];
+        
+        // Shuffle the pool using Fisher-Yates
+        for (let i = availablePool.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [availablePool[i], availablePool[j]] = [availablePool[j], availablePool[i]];
+        }
+
+        // Pick top N pieces to show
+        let numToShow = Math.min(this.maxVisiblePieces, availablePool.length);
+        for(let i = 0; i < numToShow; i++) {
+            this.spawnPieceInTray(availablePool[i]);
+        }
+        
+        this.playSnapSound(); // Nice pop sound for feedback
+        this.draw();
     }
 
     updateProgress() {
@@ -786,6 +919,108 @@ class JigsawGame {
         // unless adding continuous animations.
     }
 
+    initAudio() {
+        if (!this.audioCtx) {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.audioCtx = new AudioContext();
+            } catch (e) {
+                console.warn("Web Audio API not supported", e);
+            }
+        }
+        if (this.audioCtx && this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume();
+        }
+        this.audioUnlocked = true;
+    }
+
+    playSnapSound() {
+        if (!this.audioCtx) return;
+        
+        if (this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume();
+        }
+
+        try {
+            const osc = this.audioCtx.createOscillator();
+            const gain = this.audioCtx.createGain();
+            
+            osc.connect(gain);
+            gain.connect(this.audioCtx.destination);
+            
+            // A short, pleasant "wooden tap" or "bubble pop" sound
+            osc.type = 'sine';
+            const startTime = this.audioCtx.currentTime;
+            
+            // Pitch sweep dropping fast gives a percussive 'chunk' or 'pop' and feels physical
+            osc.frequency.setValueAtTime(400, startTime);
+            osc.frequency.exponentialRampToValueAtTime(100, startTime + 0.05);
+            
+            // Envelope
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(0.5, startTime + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.08);
+            
+            osc.start(startTime);
+            osc.stop(startTime + 0.1);
+        } catch(e) {
+            console.warn("Audio playback failed", e);
+        }
+    }
+
+    triggerSnapEffect(piece) {
+        this.snapEffects.push({
+            x: piece.currentX + (piece.width / 2),
+            y: piece.currentY + (piece.height / 2),
+            radius: Math.min(piece.width, piece.height) * 0.2,
+            maxRadius: Math.max(piece.width, piece.height) * 0.8,
+            alpha: 1.0,
+            piece: piece
+        });
+        
+        if (!this.isAnimatingEffects) {
+            this.isAnimatingEffects = true;
+            this.effectsLoop();
+        }
+    }
+
+    effectsLoop() {
+        if (!this.snapEffects || this.snapEffects.length === 0) {
+            this.isAnimatingEffects = false;
+            this.draw(); // Final clean draw
+            return;
+        }
+
+        this.draw(); // Draw standard board
+
+        this.ctx.save();
+        for (let i = this.snapEffects.length - 1; i >= 0; i--) {
+            let effect = this.snapEffects[i];
+            
+            // Draw piece flash
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${effect.alpha * 0.5})`;
+            this.ctx.fillRect(effect.piece.currentX, effect.piece.currentY, effect.piece.width, effect.piece.height);
+            
+            // Draw expanding ripple
+            this.ctx.beginPath();
+            this.ctx.arc(effect.x, effect.y, effect.radius, 0, Math.PI * 2);
+            this.ctx.strokeStyle = `rgba(255, 255, 255, ${effect.alpha})`;
+            this.ctx.lineWidth = 4 + (effect.alpha * 4);
+            this.ctx.stroke();
+
+            // Animate properties
+            effect.radius += 8; // Expand rate
+            effect.alpha -= 0.05; // Fade rate
+
+            if (effect.alpha <= 0) {
+                this.snapEffects.splice(i, 1);
+            }
+        }
+        this.ctx.restore();
+
+        requestAnimationFrame(() => this.effectsLoop());
+    }
+
     draw() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
@@ -803,8 +1038,22 @@ class JigsawGame {
             this.ctx.drawImage(this.image, this.imageOffsetX, this.imageOffsetY, this.scaledW, this.scaledH);
             this.ctx.globalAlpha = 1.0;
         } else {
+            if (this.isGridVisible) {
+                // Draw puzzle piece outlines as a guide map
+                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                this.ctx.lineWidth = 1.5;
+                this.pieces.forEach(p => {
+                    this.ctx.save();
+                    this.ctx.translate(p.correctX, p.correctY);
+                    this.ctx.beginPath();
+                    p.buildPath(this.ctx, 0, 0, p.width, p.height);
+                    this.ctx.stroke();
+                    this.ctx.restore();
+                });
+            }
+
             // Draw unlocked pieces
-            this.pieces.filter(p => !p.isLocked && p !== this.draggedPiece).forEach(p => p.draw(this.ctx));
+            this.pieces.filter(p => !p.isLocked && p !== this.draggedPiece && p.isVisible).forEach(p => p.draw(this.ctx));
 
             // Draw dragged piece on top
             if (this.draggedPiece) {
@@ -815,7 +1064,6 @@ class JigsawGame {
 
     handlePointerDown(e) {
         if (this.isPeeking) return;
-
         // Hide the Win UI automatically if the player taps the board to explore!
         if (this.placedCount === this.totalCount) {
             this.winOverlay.classList.add('hidden');
@@ -831,7 +1079,7 @@ class JigsawGame {
         const py = (e.clientY - rect.top) * scaleY;
 
         // Find topmost unlocked piece under pointer
-        const unlocked = this.pieces.filter(p => !p.isLocked);
+        const unlocked = this.pieces.filter(p => !p.isLocked && p.isVisible);
         for (let i = unlocked.length - 1; i >= 0; i--) {
             const p = unlocked[i];
             if (p.containsPoint(px, py)) {
@@ -909,10 +1157,14 @@ class JigsawGame {
             this.placedCount++;
             this.updateProgress();
 
-            // Visual pop
-            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-            this.ctx.fillRect(p.currentX, p.currentY, p.width, p.height);
-            setTimeout(() => this.draw(), 100);
+            this.playSnapSound();
+            this.triggerSnapEffect(p);
+
+            // Pop new hidden piece into visibility to maintain tray count
+            const hiddenPiece = this.pieces.find(piece => !piece.isLocked && !piece.isVisible);
+            if (hiddenPiece) {
+                this.spawnPieceInTray(hiddenPiece);
+            }
         }
 
         this.draggedPiece = null;
