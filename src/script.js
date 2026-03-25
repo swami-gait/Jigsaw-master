@@ -448,7 +448,7 @@ class JigsawGame {
         }
 
         for (let n = 0; n < words.length; n++) {
-            const testLine = line + words[n] + ' ';
+            const testLine = line + words[n]; // measure without trailing space
             const metrics = ctx.measureText(testLine);
             const testWidth = metrics.width;
 
@@ -466,7 +466,7 @@ class JigsawGame {
                 line = words[n] + ' ';
                 currentY += lineHeight;
             } else {
-                line = testLine;
+                line = testLine + ' ';
             }
         }
 
