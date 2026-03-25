@@ -499,7 +499,7 @@ class JigsawGame {
         this.startBtn.disabled = false;
     }
 
-    async generateThirukkuralImage() {
+    async generateThirukkuralImage(targetAR = 1.5) {
         if (typeof THIRUKKURAL_DATA === 'undefined' || THIRUKKURAL_DATA.length === 0) return null;
 
         // Wait for all fonts (like Noto Sans Tamil) to be fully loaded
@@ -510,10 +510,10 @@ class JigsawGame {
         const kural = THIRUKKURAL_DATA[randomIndex];
 
         // Create an offscreen canvas for our puzzle image
-        // 3:2 ratio (1800:1200) fits long Tamil text perfectly without wrapping
+        // Match width dynamically so it perfectly hugs the screen aspect ratio
         const canvas = document.createElement('canvas');
-        canvas.width = 1800;
         canvas.height = 1200;
+        canvas.width = Math.floor(canvas.height * targetAR);
         const ctx = canvas.getContext('2d');
 
         // Draw elegant gradient background
@@ -644,7 +644,23 @@ class JigsawGame {
         this.initAudio();
         if (this.isThirukkuralMode) {
             this.startBtn.disabled = true; // prevent double clicks
-            this.image = await this.generateThirukkuralImage();
+            
+            const container = document.getElementById('canvas-container');
+            const isMobile = container.clientWidth < 850;
+            const paddingW = isMobile ? 10 : 50; 
+            const paddingH = isMobile ? 20 : 50; 
+            const isLandscape = container.clientWidth > container.clientHeight;
+            const traySpace = (isLandscape && isMobile) ? 140 : 180;
+            
+            let availableW = container.clientWidth - paddingW * 2;
+            let availableH = container.clientHeight - paddingH * 2;
+            if (isLandscape) availableW -= traySpace;
+            else availableH -= traySpace;
+            
+            let targetAR = availableW / availableH;
+            targetAR = Math.max(1.2, Math.min(2.5, targetAR));
+
+            this.image = await this.generateThirukkuralImage(targetAR);
             this.startBtn.disabled = false;
         }
         if (!this.image) return;
