@@ -21,7 +21,7 @@ for k in filtered_kurals:
         "number": k["Number"],
         "line1": k["Line1"],
         "line2": k["Line2"],
-        "translation": k["explanation"]
+        "translation": k.get("Translation", k.get("explanation", ""))
     })
 
 with open("src/assets/kurals.js", "w", encoding="utf-8") as f:
