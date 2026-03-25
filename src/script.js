@@ -574,9 +574,10 @@ class JigsawGame {
         // Translation
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         ctx.font = 'italic 60px Outfit, sans-serif';
+        ctx.textAlign = 'center';
 
         startY += 40;
-        this.wrapText(ctx, kural.translation, startX, startY, maxTextWidth, 85, true);
+        this.wrapText(ctx, kural.translation, canvas.width / 2, startY, canvas.width - 240, 85, true);
 
         // Border element
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
