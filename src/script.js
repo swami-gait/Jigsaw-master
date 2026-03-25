@@ -1081,12 +1081,24 @@ class JigsawGame {
         // Friendly text hint for empty boards
         if (this.placedCount === 0 && !this.isPeeking) {
             this.ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-            // Scale font size dynamically but cap it between 16px and 32px
             const hintSize = Math.max(16, Math.min(32, this.scaledW / 20));
-            this.ctx.font = `500 ${hintSize}px Outfit, sans-serif`;
+            const subHintSize = Math.max(12, Math.min(20, this.scaledW / 35));
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText("Drag the jigsaw pieces here 🧩", this.imageOffsetX + (this.scaledW / 2), this.imageOffsetY + (this.scaledH / 2));
+            
+            const centerX = this.imageOffsetX + (this.scaledW / 2);
+            let startY = this.imageOffsetY + (this.scaledH / 2) - (hintSize);
+
+            this.ctx.font = `600 ${hintSize}px Outfit, sans-serif`;
+            this.ctx.fillText("Drag the jigsaw pieces here 🧩", centerX, startY);
+
+            startY += hintSize + 20;
+            this.ctx.font = `400 ${subHintSize}px Outfit, sans-serif`;
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            this.ctx.fillText("Hold Peek (Eye icon) to see the completed puzzle image.", centerX, startY);
+            
+            startY += subHintSize + 15;
+            this.ctx.fillText("Toggle Grid to get a helpful background outline overlay.", centerX, startY);
         }
 
         // Draw locked pieces first (bottom layer)
