@@ -83,6 +83,8 @@
                     </div>
                 </div>
 
+                <button id="how-to-play-btn" class="glass-btn" style="margin-bottom: 1rem; width: 100%; border-color: rgba(255,255,255,0.3);">How to Play <i class="fas fa-question-circle" style="margin-left: 8px;"></i></button>
+
                 <button id="start-btn" class="primary-btn" disabled>Start Puzzle</button>
             </div>
         </div>
@@ -170,6 +172,21 @@
                         <line x1="8" y1="11" x2="14" y2="11"></line>
                     </svg>
                 </button>
+            </div>
+        </div>
+
+        <!-- How To Play Modal -->
+        <div id="how-to-play-modal" class="overlay hidden" style="z-index: 200;">
+            <div class="glass-card" style="max-width: 500px; padding: 2rem; width: 90%;">
+                <h2 style="margin-bottom: 1.5rem; color: #fff; text-align: center;">How to Play Jigsaw Master</h2>
+                <ul style="color: #cbd5e1; line-height: 1.8; margin-bottom: 2rem; list-style-position: outside; padding-left: 1rem; text-align: left;">
+                    <li style="margin-bottom: 10px;"><strong>Drag & Drop:</strong> Move jigsaw pieces from the piece pool tray onto the board to assemble the image.</li>
+                    <li style="margin-bottom: 10px;"><strong>Magnetic Snapping:</strong> Bring correct neighboring pieces close, and they will snap and group together automatically!</li>
+                    <li style="margin-bottom: 10px;"><strong>Peek Eye (<i class="fas fa-eye"></i>):</strong> Press and hold the eye button at the top to preview the completed puzzle.</li>
+                    <li style="margin-bottom: 10px;"><strong>Grid Helper (<i class="fas fa-border-all"></i>):</strong> Tap the grid button to toggle a background outline map of where all pieces should go.</li>
+                    <li style="margin-bottom: 10px;"><strong>Shuffle Tray (<i class="fas fa-sync-alt"></i>):</strong> If you have too many pieces stuck underneath each other in the tray, hit shuffle to clean them up.</li>
+                </ul>
+                <button id="close-guide-btn" class="primary-btn" style="width: 100%;">Understood! Let's Go!</button>
             </div>
         </div>
 
