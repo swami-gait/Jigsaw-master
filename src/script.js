@@ -1073,12 +1073,10 @@ class JigsawGame {
     draw() {
         this.ctx.clearRect(0, 0, this.logicalW, this.logicalH);
 
-        // Only draw the background placeholder outline if Grid is visible
-        if (this.isGridVisible) {
-            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(this.imageOffsetX, this.imageOffsetY, this.scaledW, this.scaledH);
-        }
+        // Always draw the faint base placeholder outline to guide the user's drop zone 
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(this.imageOffsetX, this.imageOffsetY, this.scaledW, this.scaledH);
 
         // Draw locked pieces first (bottom layer)
         this.pieces.filter(p => p.isLocked).forEach(p => p.draw(this.ctx));
