@@ -546,14 +546,21 @@ class JigsawGame {
 
         // Tamil Kural
         ctx.fillStyle = '#ffffff';
-        // HTML5 Canvas can sometimes struggle with complex text shaping for Indic scripts (like 'றி').
-        // Prioritize system Tamil fonts that might have stronger native canvas shaping support, 
-        // while falling back to Noto.
-        ctx.font = '700 64px "Latha", "Vijaya", "Nirmala UI", "Mukta Malar", "Tamil MN", "Noto Sans Tamil", sans-serif';
 
-        // Calculate the bounding box based on Line 1 to create a unified left-aligned text block
-        const maxTextWidth = canvas.width * 0.9;
+        let tamilFontSize = 64;
+        let fontStack = '"Latha", "Vijaya", "Nirmala UI", "Mukta Malar", "Tamil MN", "Noto Sans Tamil", sans-serif';
+        ctx.font = `700 ${tamilFontSize}px ${fontStack}`;
+
+        // Ensure Line 1 (4 words) fits within the canvas horizontally
+        const maxTextWidth = canvas.width - 240; 
+        
+        while (ctx.measureText(kural.line1).width > maxTextWidth && tamilFontSize > 24) {
+            tamilFontSize -= 2;
+            ctx.font = `700 ${tamilFontSize}px ${fontStack}`;
+        }
+
         const line1Width = ctx.measureText(kural.line1).width;
+        // The boundedWidth logic for the starting position is determined by the first line width
         const boundedWidth = Math.min(line1Width, maxTextWidth);
         const startX = (canvas.width - boundedWidth) / 2;
 
@@ -561,23 +568,24 @@ class JigsawGame {
 
         // Line 1 (Tamil)
         let startY = 380;
-        startY = this.wrapText(ctx, kural.line1, startX, startY, maxTextWidth, 85);
+        startY = this.wrapText(ctx, kural.line1, startX, startY, maxTextWidth, Math.floor(tamilFontSize * 1.3));
 
-        startY += 40;
+        startY += 20;
 
         // Line 2 (Tamil)
-        startY = this.wrapText(ctx, kural.line2, startX, startY, maxTextWidth, 85);
+        startY = this.wrapText(ctx, kural.line2, startX, startY, maxTextWidth, Math.floor(tamilFontSize * 1.3));
 
         // Add breathing room before translation
-        startY += 80;
+        startY += 60;
 
         // Translation
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.font = 'italic 60px Outfit, sans-serif';
+        let englishFontSize = Math.max(tamilFontSize - 4, 20);
+        ctx.font = `italic ${englishFontSize}px Outfit, sans-serif`;
         ctx.textAlign = 'center';
 
         startY += 40;
-        this.wrapText(ctx, kural.translation, canvas.width / 2, startY, canvas.width - 240, 85, true);
+        this.wrapText(ctx, kural.translation, canvas.width / 2, startY, canvas.width - 240, Math.floor(englishFontSize * 1.4), true);
 
         // Border element
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
