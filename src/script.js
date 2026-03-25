@@ -1078,6 +1078,17 @@ class JigsawGame {
         this.ctx.lineWidth = 2;
         this.ctx.strokeRect(this.imageOffsetX, this.imageOffsetY, this.scaledW, this.scaledH);
 
+        // Friendly text hint for empty boards
+        if (this.placedCount === 0 && !this.isPeeking) {
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+            // Scale font size dynamically but cap it between 16px and 32px
+            const hintSize = Math.max(16, Math.min(32, this.scaledW / 20));
+            this.ctx.font = `500 ${hintSize}px Outfit, sans-serif`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText("Drag the jigsaw pieces here 🧩", this.imageOffsetX + (this.scaledW / 2), this.imageOffsetY + (this.scaledH / 2));
+        }
+
         // Draw locked pieces first (bottom layer)
         this.pieces.filter(p => p.isLocked).forEach(p => p.draw(this.ctx));
 
