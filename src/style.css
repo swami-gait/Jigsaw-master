@@ -689,3 +689,7 @@ header {
         padding: 0.75rem;
     }
 }
+
+@media (max-width: 850px) {
+    #fullscreen-btn { display: none !important; }
+}
