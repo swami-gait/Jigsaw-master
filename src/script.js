@@ -168,6 +168,10 @@ class JigsawGame {
         this.playAgainBtn = document.getElementById('play-again-btn');
         this.closeWinBtn = document.getElementById('close-win-btn');
 
+        this.howToPlayBtn = document.getElementById('how-to-play-btn');
+        this.howToPlayModal = document.getElementById('how-to-play-modal');
+        this.closeGuideBtn = document.getElementById('close-guide-btn');
+
         this.zoomInBtn = document.getElementById('zoom-in-btn');
         this.zoomOutBtn = document.getElementById('zoom-out-btn');
         this.zoomLabel = document.getElementById('zoom-label');
@@ -239,6 +243,11 @@ class JigsawGame {
             this.closeWinBtn.addEventListener('click', () => {
                 this.winOverlay.classList.add('hidden');
             });
+        }
+
+        if (this.howToPlayBtn) {
+            this.howToPlayBtn.addEventListener('click', () => { this.howToPlayModal.classList.remove('hidden'); });
+            this.closeGuideBtn.addEventListener('click', () => { this.howToPlayModal.classList.add('hidden'); });
         }
 
         this.peekBtn.addEventListener('pointerdown', () => { this.isPeeking = true; this.draw(); });
@@ -586,11 +595,6 @@ class JigsawGame {
 
         startY += 40;
         this.wrapText(ctx, kural.translation, canvas.width / 2, startY, canvas.width - 240, Math.floor(englishFontSize * 1.4), true);
-
-        // Border element
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.lineWidth = 4;
-        ctx.strokeRect(60, 60, canvas.width - 120, canvas.height - 120);
 
         return canvas;
     }
@@ -1069,10 +1073,12 @@ class JigsawGame {
     draw() {
         this.ctx.clearRect(0, 0, this.logicalW, this.logicalH);
 
-        // Draw the background placeholder outline
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(this.imageOffsetX, this.imageOffsetY, this.scaledW, this.scaledH);
+        // Only draw the background placeholder outline if Grid is visible
+        if (this.isGridVisible) {
+            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(this.imageOffsetX, this.imageOffsetY, this.scaledW, this.scaledH);
+        }
 
         // Draw locked pieces first (bottom layer)
         this.pieces.filter(p => p.isLocked).forEach(p => p.draw(this.ctx));
