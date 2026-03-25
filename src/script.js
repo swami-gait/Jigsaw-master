@@ -693,15 +693,25 @@ class JigsawGame {
         this.gameScreen.classList.remove('active');
         this.setupScreen.classList.add('active');
         this.pieces = [];
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        if (this.logicalW) {
+            this.ctx.clearRect(0, 0, this.logicalW, this.logicalH);
+        } else {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
     }
 
     resizeCanvas() {
         if (this.pieces.length > 0) return; // Freeze dynamic squishing during active gameplay. The user will pan natively instead!
 
         const container = document.getElementById('canvas-container');
-        this.canvas.width = container.clientWidth;
-        this.canvas.height = container.clientHeight;
+        this.logicalW = container.clientWidth;
+        this.logicalH = container.clientHeight;
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width = this.logicalW * dpr;
+        this.canvas.height = this.logicalH * dpr;
+        this.canvas.style.width = `${this.logicalW}px`;
+        this.canvas.style.height = `${this.logicalH}px`;
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
     initPuzzle() {
@@ -721,13 +731,16 @@ class JigsawGame {
 
         // Calculate image scale to fit elegantly on the canvas
         const container = document.getElementById('canvas-container');
-        const padding = 50; // Padding around the assembled puzzle
-        const traySpace = 180; // Reserve fixed space for the tray piece pool
+        const isMobile = container.clientWidth < 850;
+        
+        const paddingW = isMobile ? 10 : 50; 
+        const paddingH = isMobile ? 20 : 50; 
         
         this.isLandscapeMode = container.clientWidth > container.clientHeight;
+        const traySpace = (this.isLandscapeMode && isMobile) ? 140 : 180;
         
-        let availableW = container.clientWidth - padding * 2;
-        let availableH = container.clientHeight - padding * 2;
+        let availableW = container.clientWidth - paddingW * 2;
+        let availableH = container.clientHeight - paddingH * 2;
         
         if (this.isLandscapeMode) {
             availableW -= traySpace; // Tray goes on the right
@@ -739,7 +752,7 @@ class JigsawGame {
 
         // Prevent "stamp size" shrinking
         const minScreenDim = Math.min(container.clientWidth, container.clientHeight);
-        const minScale = (minScreenDim * 0.50) / Math.min(this.image.width, this.image.height);
+        const minScale = (minScreenDim * (isMobile ? 0.65 : 0.50)) / Math.min(this.image.width, this.image.height);
 
         const scale = Math.max(idealScale, minScale);
 
@@ -747,24 +760,31 @@ class JigsawGame {
         this.scaledH = this.image.height * scale;
 
         // Force canvas physical geometric bounds to expand out to hold the massive payload
-        let reqW = Math.max(container.clientWidth, Math.floor(this.scaledW + padding * 2));
-        let reqH = Math.max(container.clientHeight, Math.floor(this.scaledH + padding * 2));
+        let reqW = Math.max(container.clientWidth, Math.floor(this.scaledW + paddingW * 2));
+        let reqH = Math.max(container.clientHeight, Math.floor(this.scaledH + paddingH * 2));
         
         if (this.isLandscapeMode) {
-            reqW = Math.max(reqW, Math.floor(this.scaledW + padding + traySpace));
+            reqW = Math.max(reqW, Math.floor(this.scaledW + paddingW + traySpace));
         } else {
-            reqH = Math.max(reqH, Math.floor(this.scaledH + padding + traySpace));
+            reqH = Math.max(reqH, Math.floor(this.scaledH + paddingH + traySpace));
         }
 
-        this.canvas.width = reqW;
-        this.canvas.height = reqH;
+        this.logicalW = reqW;
+        this.logicalH = reqH;
+
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width = reqW * dpr;
+        this.canvas.height = reqH * dpr;
+        this.canvas.style.width = `${reqW}px`;
+        this.canvas.style.height = `${reqH}px`;
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
         if (this.isLandscapeMode) {
-            this.imageOffsetX = padding; // Pin to left edge, leaving right area strictly for the tray
-            this.imageOffsetY = (this.canvas.height - this.scaledH) / 2;
+            this.imageOffsetX = paddingW; // Pin to left edge, leaving right area strictly for the tray
+            this.imageOffsetY = (this.logicalH - this.scaledH) / 2;
         } else {
-            this.imageOffsetX = (this.canvas.width - this.scaledW) / 2;
-            this.imageOffsetY = padding; // Pin to top to leave bottom area strictly for the tray
+            this.imageOffsetX = (this.logicalW - this.scaledW) / 2;
+            this.imageOffsetY = paddingH; // Pin to top to leave bottom area strictly for the tray
         }
 
         // Create an offscreen canvas containing the scaled image
@@ -1031,7 +1051,7 @@ class JigsawGame {
     }
 
     draw() {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.clearRect(0, 0, this.logicalW, this.logicalH);
 
         // Draw the background placeholder outline
         this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
@@ -1081,8 +1101,8 @@ class JigsawGame {
         const rect = this.canvas.getBoundingClientRect();
 
         // Transform CSS display pixels into raw internal Canvas texture pixels
-        const scaleX = this.canvas.width / rect.width;
-        const scaleY = this.canvas.height / rect.height;
+        const scaleX = this.logicalW / rect.width;
+        const scaleY = this.logicalH / rect.height;
 
         const px = (e.clientX - rect.left) * scaleX;
         const py = (e.clientY - rect.top) * scaleY;
@@ -1126,8 +1146,8 @@ class JigsawGame {
         e.preventDefault(); // Prevent scrolling on touch devices while dragging
         const rect = this.canvas.getBoundingClientRect();
 
-        const scaleX = this.canvas.width / rect.width;
-        const scaleY = this.canvas.height / rect.height;
+        const scaleX = this.logicalW / rect.width;
+        const scaleY = this.logicalH / rect.height;
 
         const px = (e.clientX - rect.left) * scaleX;
         const py = (e.clientY - rect.top) * scaleY;
@@ -1138,8 +1158,8 @@ class JigsawGame {
         // Strict constraints to prevent dragging off canvas entirely
         // Padding preserves grab-ability
         const pPadding = Math.min(this.draggedPiece.width, this.draggedPiece.height) * 0.4;
-        targetX = Math.max(-pPadding, Math.min(targetX, this.canvas.width - this.draggedPiece.width + pPadding));
-        targetY = Math.max(-pPadding, Math.min(targetY, this.canvas.height - this.draggedPiece.height + pPadding));
+        targetX = Math.max(-pPadding, Math.min(targetX, this.logicalW - this.draggedPiece.width + pPadding));
+        targetY = Math.max(-pPadding, Math.min(targetY, this.logicalH - this.draggedPiece.height + pPadding));
 
         this.draggedPiece.currentX = targetX;
         this.draggedPiece.currentY = targetY;
